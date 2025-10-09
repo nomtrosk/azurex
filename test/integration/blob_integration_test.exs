@@ -25,6 +25,19 @@ defmodule Azurex.BlobIntegrationTests do
       assert Blob.get_blob(blob_name) == {:ok, @sample_file_contents}
     end
 
+    test "receive partial blob chunks via header options" do
+      blob_name = make_blob_name()
+
+      assert Blob.put_blob(
+               blob_name,
+               @sample_file_contents,
+               "text/plain"
+             ) == :ok
+
+      assert Blob.get_blob(blob_name, nil, [], [{"x-ms-range", "bytes=0-2"}]) ==
+               {:ok, String.slice(@sample_file_contents, 0..2)}
+    end
+
     test "uploading binary blob with nil content-type" do
       blob_name = make_blob_name()
 

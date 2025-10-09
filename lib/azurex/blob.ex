@@ -9,6 +9,7 @@ defmodule Azurex.Blob do
   alias Azurex.Blob.{Block, Config}
 
   @typep optional_string :: String.t() | nil
+  @typep optional_keyword :: keyword() | nil
 
   def list_containers do
     %HTTPoison.Request{
@@ -130,14 +131,14 @@ defmodule Azurex.Blob do
       {:error, %HTTPoison.Response{}}
 
   """
-  @spec get_blob(String.t(), optional_string) ::
+  @spec get_blob(String.t(), optional_string, optional_keyword, optional_keyword) ::
           {:ok, binary()}
           | {:error, HTTPoison.AsyncResponse.t() | HTTPoison.Error.t() | HTTPoison.Response.t()}
-  def get_blob(name, container \\ nil, params \\ []) do
-    blob_request(name, container, :get, params)
+  def get_blob(name, container \\ nil, params \\ [], headers \\ []) do
+    blob_request(name, container, :get, params, headers)
     |> HTTPoison.request()
     |> case do
-      {:ok, %{body: blob, status_code: 200}} -> {:ok, blob}
+      {:ok, %{body: blob, status_code: status_code}} when status_code in [200, 206] -> {:ok, blob}
       {:ok, err} -> {:error, err}
       {:error, err} -> {:error, err}
     end
