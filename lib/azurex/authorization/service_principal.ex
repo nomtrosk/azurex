@@ -2,6 +2,7 @@ defmodule Azurex.Authorization.ServicePrincipal do
   require Logger
   alias Azurex.Blob.Config
 
+  @ets_table_name :service_principal_bearer_token_cache
   @cache_key "azurex_bearer_token"
   @cache_expiry_margin_seconds 10
 
@@ -23,10 +24,10 @@ defmodule Azurex.Authorization.ServicePrincipal do
   defp fetch_bearer_token_cached(client_id, client_secret, tenant_id) do
     cache_key = @cache_key
 
-    :ets.info(:bearer_token_cache) != :undefined ||
-      :ets.new(:bearer_token_cache, [:named_table])
+    :ets.info(@ets_table_name) != :undefined ||
+      :ets.new(@ets_table_name, [:named_table, :public])
 
-    case :ets.lookup(:bearer_token_cache, cache_key) do
+    case :ets.lookup(@ets_table_name, cache_key) do
       [{^cache_key, token, expiry}] ->
         if expiry > System.os_time(:second) do
           token
@@ -43,7 +44,7 @@ defmodule Azurex.Authorization.ServicePrincipal do
     case fetch_bearer_token(client_id, client_secret, tenant_id) do
       {:ok, token} ->
         expiry = extract_expiry_time(token) - @cache_expiry_margin_seconds
-        :ets.insert(:bearer_token_cache, {@cache_key, token, expiry})
+        :ets.insert(@ets_table_name, {@cache_key, token, expiry})
         token
 
       :error ->

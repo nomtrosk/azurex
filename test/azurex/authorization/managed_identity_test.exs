@@ -104,6 +104,50 @@ defmodule Azurex.Authorization.ManagedIdentityTest do
       end
     end
 
+    test "bearer cache works across processes", %{bypass: bypass} do
+      federated_token_file_path = create_token_file()
+
+      # Set token time so it expires in 100 seconds
+      token_expires_in = :timer.seconds(-100)
+      input_request = generate_request()
+
+      # Expect one token request because the second will be cached
+      prepare_auth_endpoint(bypass, token_expires_in)
+
+      # Fetch bearer token and cache
+      assert %HTTPoison.Request{} =
+               ManagedIdentity.add_bearer_token(
+                 input_request,
+                 "client_id",
+                 "tenant_id",
+                 federated_token_file_path
+               )
+
+      task =
+        Task.async(fn ->
+          prepare_auth_endpoint(bypass, token_expires_in)
+
+          ManagedIdentity.add_bearer_token(
+            input_request,
+            "client_id",
+            "tenant_id",
+            federated_token_file_path
+          )
+        end)
+
+      assert Task.await(task) == %HTTPoison.Request{
+               body: "sample body",
+               headers: [
+                 {"Authorization", "Bearer #{@expected_access_token}"},
+                 {"x-ms-blob-type", "BlockBlob"}
+               ],
+               method: :put,
+               options: [recv_timeout: :infinity],
+               params: %{},
+               url: "https://example.com/sample-path"
+             }
+    end
+
     test "Failure", %{bypass: bypass} do
       federated_token_file_path = create_token_file()
 

@@ -2,6 +2,7 @@ defmodule Azurex.Authorization.ManagedIdentity do
   require Logger
   alias Azurex.Blob.Config
 
+  @ets_table_name :managed_identity_bearer_token_cache
   @cache_key "azurex_bearer_token"
   @cache_expiry_margin_seconds 10
 
@@ -21,13 +22,13 @@ defmodule Azurex.Authorization.ManagedIdentity do
   end
 
   defp fetch_bearer_token_cached(client_id, tenant_id, identity_token) do
-    if :ets.info(:bearer_token_cache) == :undefined do
-      :ets.new(:bearer_token_cache, [:named_table])
+    if :ets.info(@ets_table_name) == :undefined do
+      :ets.new(@ets_table_name, [:named_table, :public])
     end
 
     system_os_time = System.os_time(:second)
 
-    case :ets.lookup(:bearer_token_cache, @cache_key) do
+    case :ets.lookup(@ets_table_name, @cache_key) do
       [{@cache_key, token, expiry}] when expiry > system_os_time -> token
       _ -> refresh_bearer_token_cache(client_id, tenant_id, identity_token)
     end
@@ -37,7 +38,7 @@ defmodule Azurex.Authorization.ManagedIdentity do
     case fetch_bearer_token(client_id, tenant_id, identity_token) do
       {:ok, %{"access_token" => token, "expires_in" => expires_in}} ->
         expiry = System.os_time(:second) + expires_in - @cache_expiry_margin_seconds
-        :ets.insert(:bearer_token_cache, {@cache_key, token, expiry})
+        :ets.insert(@ets_table_name, {@cache_key, token, expiry})
         token
 
       :error ->

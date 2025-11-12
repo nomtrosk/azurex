@@ -100,6 +100,48 @@ defmodule Azurex.Authorization.ServicePrincipalTest do
       end
     end
 
+    test "bearer cache works across processes", %{bypass: bypass} do
+      # Set token time so it expires in 100 seconds
+      t = generate_token(:timer.seconds(-100))
+      input_request = generate_request()
+
+      # Expect one token request because the second will be cached
+      prepare_auth_enpoint(bypass, t)
+
+      # Fetch bearer token and cache
+      assert %HTTPoison.Request{} =
+               ServicePrincipal.add_bearer_token(
+                 input_request,
+                 "client_id",
+                 "client_secret",
+                 "tenant_id"
+               )
+
+      task =
+        Task.async(fn ->
+          prepare_auth_enpoint(bypass, t)
+
+          ServicePrincipal.add_bearer_token(
+            input_request,
+            "client_id",
+            "client_secret",
+            "tenant_id"
+          )
+        end)
+
+      assert Task.await(task) == %HTTPoison.Request{
+               body: "sample body",
+               headers: [
+                 {"Authorization", "Bearer #{t}"},
+                 {"x-ms-blob-type", "BlockBlob"}
+               ],
+               method: :put,
+               options: [recv_timeout: :infinity],
+               params: %{},
+               url: "https://example.com/sample-path"
+             }
+    end
+
     test "Failure", %{bypass: bypass} do
       Bypass.expect_once(bypass, "POST", "/tenant_id/oauth2/v2.0/token", fn conn ->
         Plug.Conn.resp(conn, 403, "Not authorized")
